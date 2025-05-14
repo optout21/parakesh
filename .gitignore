@@ -2,3 +2,7 @@ Cargo.lock
 
 target/*
 
+# Default private secret file
+parakesh.secret
+# DB files
+*.dedb

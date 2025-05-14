@@ -1,36 +1,12 @@
-use parakesh_common::pk_app::{MintsSummary, PKApp};
+use parakesh_common::pk_app::{BalanceInfo, WalletInfo};
+use parakesh_common::pk_app_async::AppEvent;
+use parakesh_common::{MintsSummary, PKAppAsync};
 
 use std::io;
 use std::io::Write;
 
-async fn print_status(app: &PKApp) {
-    let info = match app.get_wallet_info().await {
-        Ok(info) => info,
-        Err(err) => {
-            println!("\nERROR retrieving wallet info! {}", err);
-            return;
-        }
-    };
-    if info.is_inititalized {
-        print!("Wallet: OK");
-    } else {
-        print!("Wallet: NOT INITIALIZED");
-    }
-    print!(" \t ");
-    match app.get_balance().await {
-        Ok(balance) => print!("Balance: {} sats", balance.0),
-        Err(_err) => print!("Balance: ERR"),
-    }
-    print!(" \t ");
-    match &info.mints_summary {
-        MintsSummary::None => print!("No mints"),
-        MintsSummary::Single(mint) => print!("Mint: {}", mint),
-        MintsSummary::Multiple(cnt) => print!("{} mints", cnt),
-    }
-    print!(" \t ");
-    print!("Selected: {}", info.selected_mint_url);
-    print!(" \t ");
-    println!("");
+fn get_status(app: &mut PKAppAsync) {
+    let _res = app.get_balance_and_wallet_info();
 }
 
 fn cmd_help() {
@@ -51,113 +27,51 @@ fn cmd_help() {
     println!("");
 }
 
-async fn cmd_status(app: &PKApp) {
-    print_status(app).await
+fn cmd_status(app: &mut PKAppAsync) {
+    get_status(app)
 }
 
-async fn cmd_list_mints(app: &PKApp) {
-    let mints = match app.get_mints_info().await {
-        Ok(mints) => mints,
-        Err(err) => {
-            println!("\nERROR: {}", err.to_string());
-            return;
-        }
-    };
-    if mints.is_empty() {
-        println!("No mints used.");
-    } else {
-        println!("Mints used: ({})", mints.len());
-        for (i, mint) in mints.iter().enumerate() {
-            println!("    {}\t{}\t{}", i + 1, mint.url, mint.balance);
-        }
-    }
+fn cmd_list_mints(app: &mut PKAppAsync) {
+    let _res = app.get_mints_info();
 }
 
-async fn cmd_addmint(app: &mut PKApp, mint_url: &str) {
-    match app.add_mint(mint_url).await {
-        Ok(_) => {}
-        Err(err) => {
-            println!("\nERROR adding mint {} {}", mint_url, err.to_string());
-            return;
-        }
-    }
-    println!("Selected mint: {}", app.selected_mint());
+fn cmd_addmint(app: &mut PKAppAsync, mint_url: &str) {
+    let _res = app.add_mint(mint_url.to_owned());
 }
 
-async fn cmd_selectmint_by_number(app: &mut PKApp, mint_number: usize) {
-    match app.select_mint_by_number(mint_number).await {
-        Ok(_) => println!("Selected mint: {}", app.selected_mint()),
-        Err(err) => println!(
-            "\nERROR selecting mint {}; {}",
-            mint_number,
-            err.to_string()
-        ),
-    }
+fn cmd_selectmint_by_index(app: &mut PKAppAsync, mint_number: usize) {
+    let _res = app.select_mint_by_index(mint_number);
 }
 
-async fn cmd_selectmint_by_url(app: &mut PKApp, mint_url: &str) {
-    match app.select_mint(mint_url).await {
-        Ok(_) => {}
-        Err(err) => {
-            println!("\nERROR selecting mint {} {}", mint_url, err.to_string());
-            return;
-        }
-    }
-    println!("Selected mint: {}", app.selected_mint());
+fn cmd_selectmint_by_url(app: &mut PKAppAsync, mint_url: &str) {
+    let _res = app.select_mint(mint_url.to_owned());
 }
 
-async fn cmd_recln(app: &mut PKApp, amount_sats: u64) {
-    match app.mint_from_ln_start(amount_sats).await {
-        Ok((invoice, intermediary_result)) => {
-            println!("Pay the invoice: {}", invoice);
-            match app.mint_from_ln_wait(intermediary_result).await {
-                Ok(minted) => println!(
-                    "Received LN, got ecash for {} sats, with mint {}",
-                    minted,
-                    app.selected_mint()
-                ),
-                Err(err) => println!("\nERROR receiving LN, {}", err),
-            }
-        }
-        Err(err) => println!("\nERROR receiving LN, {}", err),
-    }
+fn cmd_recln(app: &mut PKAppAsync, amount_sats: u64) {
+    let _res = app.mint_from_ln(amount_sats);
 }
 
-async fn cmd_sendln(app: &mut PKApp, ln_invoice: &str) {
-    match app.melt_to_ln(ln_invoice).await {
-        Ok(sent) => println!(
-            "Sent LN, amount {} sats, from mint {}",
-            sent,
-            app.selected_mint()
-        ),
-        Err(err) => println!("\nERROR sending LN, {}", err.to_string()),
-    }
+fn cmd_sendln(app: &mut PKAppAsync, ln_invoice: &str) {
+    let _res = app.melt_to_ln(ln_invoice.to_owned());
 }
 
-async fn cmd_rec(app: &mut PKApp, token: &str) {
-    match app.receive_ecash(token).await {
-        Ok(received) => println!("Received ecash for {} sats", received,),
-        Err(err) => println!("\nERROR receiving, {}", err.to_string()),
-    }
+fn cmd_rec(app: &mut PKAppAsync, token: &str) {
+    let _res = app.receive_ec(token.to_owned());
 }
 
-async fn cmd_send(app: &mut PKApp, amount_sats: u64) {
-    match app.send_ecash(amount_sats).await {
-        Ok(token) => println!(
-            "Prepared token for sending, amount {} (sats):\n\n{}\n",
-            amount_sats, token,
-        ),
-        Err(err) => println!("\nERROR in send, {}", err.to_string()),
-    }
+fn cmd_send(app: &mut PKAppAsync, amount_sats: u64) {
+    let _res = app.send_ec(amount_sats);
 }
 
-async fn poll_for_user_input(app: &mut PKApp) {
+fn print_prompt() {
+    print!("> ");
+    std::io::stdout().flush().unwrap(); // Without flushing, the `>` doesn't print
+}
+
+fn poll_for_user_input(app: &mut PKAppAsync) {
     println!("Enter \"help\" to view available commands. Press Ctrl-D to quit.");
     loop {
-        print_status(&app).await;
-
-        print!("> ");
-        std::io::stdout().flush().unwrap(); // Without flushing, the `>` doesn't print
+        print_prompt();
 
         let mut line = String::new();
         if let Err(e) = io::stdin().read_line(&mut line) {
@@ -174,8 +88,8 @@ async fn poll_for_user_input(app: &mut PKApp) {
             match word {
                 "help" => cmd_help(),
                 "quit" | "exit" | "q" => break,
-                "status" => cmd_status(app).await,
-                "listmints" => cmd_list_mints(app).await,
+                "status" => cmd_status(app),
+                "listmints" => cmd_list_mints(app),
 
                 "addmint" => {
                     let mint_url = if let Some(word) = words.next() {
@@ -184,7 +98,7 @@ async fn poll_for_user_input(app: &mut PKApp) {
                         println!("\nERROR: addmint requires <mint_url>");
                         continue;
                     };
-                    cmd_addmint(app, mint_url).await;
+                    cmd_addmint(app, mint_url);
                 }
 
                 "selectmint" => {
@@ -195,10 +109,10 @@ async fn poll_for_user_input(app: &mut PKApp) {
                         continue;
                     };
                     match mint_number_or_url.parse::<usize>() {
-                        Ok(mint_number) => cmd_selectmint_by_number(app, mint_number).await,
+                        Ok(mint_number) => cmd_selectmint_by_index(app, mint_number),
                         Err(_) => {
                             // could not parse parameter as number, assume url
-                            cmd_selectmint_by_url(app, mint_number_or_url).await;
+                            cmd_selectmint_by_url(app, mint_number_or_url);
                         }
                     }
                 }
@@ -220,7 +134,7 @@ async fn poll_for_user_input(app: &mut PKApp) {
                             continue;
                         }
                     };
-                    cmd_recln(app, amount).await;
+                    cmd_recln(app, amount);
                 }
 
                 "sendln" => {
@@ -230,7 +144,7 @@ async fn poll_for_user_input(app: &mut PKApp) {
                         println!("\nERROR: sendln requires a LN invoice");
                         continue;
                     };
-                    cmd_sendln(app, invoice_str).await;
+                    cmd_sendln(app, invoice_str);
                 }
 
                 "rec" => {
@@ -240,7 +154,7 @@ async fn poll_for_user_input(app: &mut PKApp) {
                         println!("\nERROR: rec requires an ecash token");
                         continue;
                     };
-                    cmd_rec(app, token_str).await;
+                    cmd_rec(app, token_str);
                 }
 
                 "send" => {
@@ -260,52 +174,118 @@ async fn poll_for_user_input(app: &mut PKApp) {
                             continue;
                         }
                     };
-                    cmd_send(app, amount).await;
-                }
-
-                "test" => {
-                    print_status(&app).await;
-
-                    // let _res1 = app.initialize().unwrap();
-                    let minted = app
-                        .mint_from_ln(10, |invoice| {
-                            println!("\nInvoice: {}\n", invoice);
-                        })
-                        .await
-                        .unwrap();
-                    println!("Minted {}", minted);
-
-                    print_status(&app).await;
-
-                    let token = app.send_ecash(10).await.unwrap();
-                    println!("Prepared for send {}", token);
-
-                    print_status(&app).await;
+                    cmd_send(app, amount);
                 }
 
                 _ => println!("Unknown command. See `\"help\" for available commands."),
             }
         }
+
+        get_status(app);
     }
+}
+
+fn print_balance_and_wallet_info(balance_info: Option<&BalanceInfo>, wallet_info: &WalletInfo) {
+    if wallet_info.is_inititalized {
+        print!("Wallet: OK");
+    } else {
+        print!("Wallet: NOT INITIALIZED");
+    }
+    print!(" \t ");
+    if let Some(balance) = balance_info {
+        print!("Balance: {} sats", balance.0);
+    }
+    print!(" \t ");
+    match &wallet_info.mints_summary {
+        MintsSummary::None => print!("No mints"),
+        MintsSummary::Single(mint) => print!("Mint: {}", mint),
+        MintsSummary::Multiple(cnt) => print!("{} mints", cnt),
+    }
+    print!(" \t ");
+    print!("Selected: {}", wallet_info.selected_mint_url);
+    print!(" \t ");
+    println!("");
+}
+
+fn handle_event(event: AppEvent) {
+    // println!("Got AppEvent {:?}", event);
+    match event {
+        AppEvent::BalanceChange(balance_info) => match balance_info {
+            Ok(balance) => println!("Balance: {} sats", balance.0),
+            Err(err) => println!("\nERROR retrieving balance! {}", err),
+        },
+        AppEvent::WalletInfo(wallet_info) => match wallet_info {
+            Ok(wallet_info) => {
+                print_balance_and_wallet_info(None, &wallet_info);
+            }
+            Err(err) => println!("\nERROR retrieving wallet info! {}", err),
+        },
+        AppEvent::BalanceAndWalletInfo(result) => match result {
+            Ok((balance_info, wallet_info)) => {
+                print_balance_and_wallet_info(Some(&balance_info), &wallet_info);
+            }
+            Err(err) => println!("\nERROR retrieving balance/wallet info! {}", err),
+        },
+        AppEvent::MintsInfo(mint_info) => match mint_info {
+            Ok(mints) => {
+                if mints.is_empty() {
+                    println!("No mints used.");
+                } else {
+                    println!("Mints used: ({})", mints.len());
+                    for (i, mint) in mints.iter().enumerate() {
+                        println!("    {}\t{}\t{}", i + 1, mint.url, mint.balance);
+                    }
+                }
+            }
+            Err(err) => println!("\nERROR retrieving mints info {}", err.to_string()),
+        },
+        AppEvent::MintAdded(res) => match res {
+            Ok(_) => println!("Mint added"),
+            Err(err) => println!("\nERROR adding mint {}", err.to_string()),
+        },
+        AppEvent::MintSelectedByUrl(res) => match res {
+            Ok(url) => println!("Mint selected: {}", url),
+            Err(err) => println!("\nERROR selecting mint {}", err.to_string()),
+        },
+        AppEvent::MintSelectedByIndex(res) => match res {
+            Ok(index) => println!("Mint selected: {}", index),
+            Err(err) => println!("\nERROR selecting mint {}", err.to_string()),
+        },
+        AppEvent::MintFromLnRes(res) => match res {
+            Ok(minted) => println!("Received LN, got ecash for {} sats", minted),
+            Err(err) => println!("\nERROR in receive LN {}", err.to_string()),
+        },
+        AppEvent::MintFromLnInvoice(invoice) => println!("Pay the invoice!\n\n{}\n", invoice),
+        AppEvent::MeltToLnRes(res) => match res {
+            Ok(sent) => println!("Sent LN, amount {} sats", sent),
+            Err(err) => println!("\nERROR in send LN {}", err.to_string()),
+        },
+        AppEvent::ReceivedEC(res) => match res {
+            Ok(received) => println!("Received ecash for {} sats", received),
+            Err(err) => println!("\nERROR in receive {}", err.to_string()),
+        },
+        AppEvent::SendECRes(res) => match res {
+            Ok((amount, token)) => println!(
+                "Prepared token for sending, amount {} (sats):\n\n{}\n",
+                amount, token,
+            ),
+            Err(err) => println!("\nERROR in send {}", err.to_string()),
+        },
+    }
+    // for nicer console reading
+    print_prompt();
 }
 
 #[tokio::main]
 async fn main() {
     println!("ParaKesh: GM!");
+    // TODO args, etc.
 
-    // args, init, etc.
-
-    let mut app = PKApp::new().await.unwrap();
+    let mut app = PKAppAsync::new().unwrap();
+    app.init_with_callback(handle_event).unwrap();
 
     // handle interactive commands
-    poll_for_user_input(&mut app).await;
+    poll_for_user_input(&mut app);
 
-    // event_loop_handle.abort();
-
-    // stop, etc.
-
-    // while !bg_handle.is_finished() {
-    //     std::thread::sleep(Duration::from_millis(10));
-    // }
     println!("ParaKesh: ciao!");
 }

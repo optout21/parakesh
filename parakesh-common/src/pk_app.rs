@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 const KEY_DERIVATION_PATH: &str = "m/84'/0'/0'/0/0";
 
@@ -30,7 +30,7 @@ pub struct PKApp {
     store: Arc<WalletRedbDatabase>,
     /// CDK multi-mint wallet
     multi_mint_wallet: MultiMintWallet,
-    // Current mint, to use with operations
+    /// Current mint, to use with operations
     selected_mint: Option<MintUrl>,
 }
 
@@ -73,21 +73,12 @@ impl fmt::Display for StringError {
     }
 }
 
-const CHECK_STEP_INCREASE: f64 = 1.05;
-
 /// Intermediary result used in `mint_from_ln_start` and `mint_from_ln_wait`.
 #[derive(Clone, Debug)]
 pub struct MintFromLnIntermediaryResult {
     mint_quote: cdk::wallet::MintQuote,
     /// Set if complete (paid)
     pub paid_result: Option<Result<u64, String>>,
-    timeout_time: SystemTime,
-    pub next_check_time: SystemTime,
-    step: f64,
-}
-
-pub struct PKAppLazy {
-    app: Option<PKApp>,
 }
 
 impl PKApp {
@@ -177,7 +168,7 @@ impl PKApp {
         // Select first wallet
         if wallets_len > 0 {
             let _res = app
-                .select_mint_by_number(1)
+                .select_mint_by_index(1)
                 .await
                 .map_err(|e| e.to_string())?;
         }
@@ -246,37 +237,34 @@ impl PKApp {
     //     self.get_mint_wallet(mint_url).await
     // }
 
-    fn get_seed(&self) -> Result<[u8; 32], Box<dyn std::error::Error>> {
-        let seed_privkey =
-            self.seedstore
-                .get_secret_child_private_key(&ChildSpecifier::Derivation(
-                    KEY_DERIVATION_PATH.into(),
-                ))?;
+    fn get_seed(&self) -> Result<[u8; 32], String> {
+        let seed_privkey = self
+            .seedstore
+            .get_secret_child_private_key(&ChildSpecifier::Derivation(KEY_DERIVATION_PATH.into()))
+            .map_err(|err| err.to_string())?;
         Ok(seed_privkey.as_ref().clone())
     }
 
-    pub async fn add_mint(&mut self, mint_url_str: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn add_mint(&mut self, mint_url_str: &str) -> Result<(), String> {
         let wallet = Wallet::new(
             &mint_url_str.to_string(),
             self.unit.clone(),
             self.store.clone(),
             &self.get_seed()?,
             None,
-        )?;
+        )
+        .map_err(|err| err.to_string())?;
         // This is needed to store the mint in the store
-        let mint_info = wallet.get_mint_info().await?;
+        let mint_info = wallet
+            .get_mint_info()
+            .await
+            .map_err(|err| err.to_string())?;
         if let Some(_info) = mint_info {
         } else {
-            return Err(Box::new(StringError(format!(
-                "Could not obtain mint info for {}",
-                mint_url_str
-            ))));
+            return Err(format!("Could not obtain mint info for {}", mint_url_str));
         }
         self.multi_mint_wallet.add_wallet(wallet).await;
-        let _res = self
-            .select_mint(mint_url_str)
-            .await
-            .map_err(|e| Box::new(StringError(e)))?;
+        let _res = self.select_mint(mint_url_str).await?;
         Ok(())
     }
 
@@ -287,37 +275,37 @@ impl PKApp {
         }
     }
 
-    pub async fn select_mint(&mut self, mint_url_str: &str) -> Result<(), String> {
+    pub async fn select_mint(&mut self, mint_url_str: &str) -> Result<String, String> {
         let mint_url = MintUrl::from_str(mint_url_str).map_err(|e| e.to_string())?;
         let _wallet = self
             .get_mint_wallet(mint_url.clone())
             .await
             .map_err(|e| e.to_string())?;
         self.selected_mint = Some(mint_url);
-        Ok(())
+        Ok(mint_url_str.to_owned())
     }
 
-    pub async fn select_mint_by_number(
+    pub async fn select_mint_by_index(
         &mut self,
         mint_index_1_based: usize,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<usize, String> {
         let wallets = &self.multi_mint_wallet.get_wallets().await;
         if mint_index_1_based == 0 {
-            return Err(Box::new(StringError(format!(
+            return Err(format!(
                 "Invalid mint index {}, the first is 1",
                 mint_index_1_based
-            ))));
+            ));
         }
         let max_index = wallets.len();
         if mint_index_1_based > max_index {
-            return Err(Box::new(StringError(format!(
+            return Err(format!(
                 "Invalid mint index {}, maximum is {}",
                 mint_index_1_based, max_index
-            ))));
+            ));
         }
         let mint_url = &wallets[mint_index_1_based - 1].mint_url;
         self.selected_mint = Some(mint_url.clone());
-        Ok(())
+        Ok(mint_index_1_based)
     }
 
     pub async fn get_mints_info(&self) -> Result<Vec<MintInfo>, String> {
@@ -351,7 +339,7 @@ impl PKApp {
         }
     }
 
-    pub async fn send_ecash(&mut self, amount_sats: u64) -> Result<String, String> {
+    pub async fn send_ecash(&mut self, amount_sats: u64) -> Result<(u64, String), String> {
         if let Some(sel_mint) = &self.selected_mint {
             let wallet = self
                 .get_mint_wallet(sel_mint.clone())
@@ -367,7 +355,7 @@ impl PKApp {
                 .await
                 .map_err(|e| e.to_string())?;
 
-            Ok(token.to_v3_string())
+            Ok((amount_sats, token.to_v3_string()))
         } else {
             Err("No selected mint!".to_string())
         }
@@ -407,18 +395,11 @@ impl PKApp {
 
             // println!("Pay request: {}", quote.request);
             let invoice_to_be_paid = mint_quote.request.clone();
-            let now = SystemTime::now();
-            let step = 2000f64; // ms
             Ok((
                 invoice_to_be_paid,
                 MintFromLnIntermediaryResult {
                     mint_quote,
                     paid_result: None,
-                    timeout_time: now.checked_add(Duration::from_secs(5 * 60)).unwrap_or(now),
-                    next_check_time: now
-                        .checked_add(Duration::from_millis(step as u64))
-                        .unwrap_or(now),
-                    step,
                 },
             ))
         } else {
@@ -432,6 +413,7 @@ impl PKApp {
         &mut self,
         intermediary_result: MintFromLnIntermediaryResult,
     ) -> Result<MintFromLnIntermediaryResult, String> {
+        println!("Polling for mint result...");
         if intermediary_result.paid_result.is_some() {
             return Ok(intermediary_result);
         }
@@ -446,7 +428,7 @@ impl PKApp {
                 .mint_quote_state(quote_id)
                 .await
                 .map_err(|e| e.to_string())?;
-            if status.state == MintQuoteState::Paid {
+            if status.state == MintQuoteState::Paid || status.state == MintQuoteState::Issued {
                 // Mint the received amount
                 let proofs = wallet
                     .mint(quote_id, SplitTarget::default(), None)
@@ -458,19 +440,9 @@ impl PKApp {
                 return Ok(res2);
             }
             // not paid yet
-            let now = SystemTime::now();
-            if now > intermediary_result.timeout_time {
-                return Err("Timeout while waiting for mint quote to be paid".into());
-            }
-            // still need to wait
             println!("Quote state: {}", status.state);
 
-            let mut res2 = intermediary_result;
-            res2.next_check_time = res2
-                .next_check_time
-                .checked_add(Duration::from_millis(res2.step as u64))
-                .unwrap_or(res2.next_check_time);
-            res2.step = res2.step * CHECK_STEP_INCREASE;
+            let res2 = intermediary_result;
             Ok(res2)
         } else {
             Err("No selected mint!".to_string())
@@ -493,14 +465,9 @@ impl PKApp {
                 return res;
             }
             // not paid, wait some more
-            let now = SystemTime::now();
-            let to_wait = res2
-                .next_check_time
-                .duration_since(now)
-                .unwrap_or(Duration::from_millis(10));
             int_res = res2;
             // sleep(to_wait).await;
-            tokio::time::sleep(to_wait).await;
+            tokio::time::sleep(Duration::from_secs(2)).await;
         }
     }
 
@@ -546,23 +513,5 @@ impl PKApp {
         } else {
             Err("No selected mint!".to_owned())
         }
-    }
-}
-
-impl PKAppLazy {
-    pub fn new() -> Self {
-        Self { app: None }
-    }
-
-    pub async fn init(&mut self) -> Result<(), String> {
-        if self.app.is_some() {
-            return Ok(());
-        }
-        self.app = Some(PKApp::new().await?);
-        Ok(())
-    }
-
-    pub async fn get_balance(&self) -> Result<BalanceInfo, String> {
-        self.app.as_ref().expect("Not inited").get_balance().await
     }
 }

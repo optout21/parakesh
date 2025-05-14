@@ -4,6 +4,8 @@ resolver = "2"
 members = [ "parakesh",
     "parakesh",
     "parakesh-common",
+    "parakesh-console-sync",
+    #"parakesh-ui",
 ]
 
 exclude = []

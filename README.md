@@ -44,6 +44,7 @@ CDK:
 
 https://21mint.me
 https://mint.lnwallet.app
+https://mint.minibits.cash/Bitcoin
 
 
 ## Test Mints
