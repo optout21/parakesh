@@ -515,3 +515,9 @@ impl PKApp {
         }
     }
 }
+
+impl MintFromLnIntermediaryResult {
+    pub fn id(&self) -> String {
+        self.mint_quote.id.clone()
+    }
+}

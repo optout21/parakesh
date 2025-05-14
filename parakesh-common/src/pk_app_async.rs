@@ -2,6 +2,7 @@ use crate::pk_app::{BalanceInfo, MintFromLnIntermediaryResult, MintInfo, PKApp, 
 use futures::channel::mpsc::{self, Receiver, Sender};
 use futures::task::AtomicWaker;
 use futures::{stream, SinkExt, Stream, StreamExt};
+use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
 use std::task::{Context, Poll};
@@ -10,8 +11,6 @@ use std::time::{Duration, SystemTime};
 /// Events delivered to the callback.
 #[derive(Clone, Debug)]
 pub enum AppEvent {
-    // GetBalance,
-    // CreateResult(Result<(), String>),
     WalletInfo(Result<WalletInfo, String>),
     BalanceChange(Result<BalanceInfo, String>),
     BalanceAndWalletInfo(Result<(BalanceInfo, WalletInfo), String>),
@@ -38,7 +37,6 @@ pub enum AppRequest {
     SelectMintByIndex(usize),
     AddMint(String),
     MintFromLn(u64),
-    MintFromLnCheck(MintFromLnIntermediaryResult),
     ReceiveEC(String),
     MeltToLn(String),
     SendEC(u64),
@@ -64,7 +62,7 @@ pub struct PendingPoll {
 /// Keeps pending poll operations, if there are any.
 #[derive(Clone)]
 pub struct PendingPolls {
-    p: Arc<RwLock<Vec<PendingPoll>>>,
+    p: Arc<RwLock<HashMap<String, PendingPoll>>>,
     waker: Arc<RwLock<AtomicWaker>>,
 }
 
@@ -72,12 +70,7 @@ pub struct PendingPolls {
 /// for use in environments without async/await (e.g. iced)
 #[derive(Clone)]
 pub struct PKAppAsync {
-    // sender: QueueSender<AppRequest>,
     incoming_sender: Sender<AppRequest>,
-    // incoming_receiver: Receiver<AppRequest>,
-    // app: Option<PKApp>,
-    // /// Pending poll operations
-    // pending_polls: Arc<PendingPolls>,
 }
 
 impl PendingPoll {
@@ -90,7 +83,7 @@ impl PendingPoll {
 impl PendingPolls {
     pub fn new() -> Self {
         Self {
-            p: Arc::new(RwLock::new(Vec::new())),
+            p: Arc::new(RwLock::new(HashMap::new())),
             waker: Arc::new(RwLock::new(AtomicWaker::new())),
         }
     }
@@ -100,7 +93,8 @@ impl PendingPolls {
     }
 
     pub fn add(&mut self, poll: PendingPoll) {
-        self.p.write().unwrap().push(poll);
+        let id = poll.result.id();
+        self.p.write().unwrap().insert(id, poll);
         self.waker.write().unwrap().wake();
     }
 
@@ -119,50 +113,35 @@ impl PendingPolls {
 
     /// Return the earliest runnable operation.
     /// Also return the duration till the earliest future time, if there is no runnable
-    fn get_runnable(&mut self) -> (Option<AppRequest>, Option<Duration>) {
-        let now = SystemTime::now();
-        let mut earliest: Option<(SystemTime, usize)> = None;
-        for (i, p) in self.p.write().unwrap().iter().enumerate() {
-            let is_earlier = if let Some((earliest, _i)) = earliest {
-                p.next_time < earliest
-            } else {
-                true
-            };
-            if is_earlier {
-                earliest = Some((p.next_time, i));
+    /// This should not write-lock
+    fn get_runnable(&mut self) -> (Option<String>, Option<Duration>) {
+        let mut earliest: Option<(String, SystemTime)> = None;
+        {
+            let pw = self.p.read().unwrap();
+            for key in pw.keys() {
+                let p = &pw[key];
+                let is_earlier = if let Some((ref _key, earliest)) = earliest {
+                    p.next_time < earliest
+                } else {
+                    true
+                };
+                if is_earlier {
+                    earliest = Some((key.clone(), p.next_time));
+                }
             }
         }
-        if let Some((earliest, index)) = earliest {
+        if let Some((ref key, earliest)) = earliest {
             // check if this earliest is already runnable (in the past)
-            let more_runs = {
-                let pr = &self.p.read().unwrap()[index];
-                if pr.next_time <= now {
-                    // check if last run
-                    if pr.next_time > pr.stop_time {
-                        // no more runs
-                        false
-                    } else {
-                        // more runs
-                        true
-                    }
+            let now = SystemTime::now();
+            if let Some(ref poll) = &self.p.read().unwrap().get(key) {
+                if poll.next_time <= now {
+                    (Some(key.clone()), None)
                 } else {
                     // no runnable
-                    return (None, Some(earliest.duration_since(now).unwrap_or_default()));
+                    (None, Some(earliest.duration_since(now).unwrap_or_default()))
                 }
-            };
-            if more_runs {
-                // more runs, update next time
-                self.p.write().unwrap()[index].advance();
-                (
-                    Some(AppRequest::Poll(
-                        self.p.read().unwrap()[index].result.clone(),
-                    )),
-                    None,
-                )
             } else {
-                // no more runs
-                let pp = self.remove(index);
-                (Some(AppRequest::Poll(pp.result)), None)
+                (None, Some(earliest.duration_since(now).unwrap_or_default()))
             }
         } else {
             // no operation
@@ -170,8 +149,39 @@ impl PendingPolls {
         }
     }
 
-    fn remove(&mut self, index: usize) -> PendingPoll {
-        self.p.write().unwrap().remove(index)
+    fn prepare_for_run(&mut self, key: &String) -> Option<AppRequest> {
+        // check if there should be more iterations
+        let more_runs = {
+            if let Some(ref poll) = self.p.read().unwrap().get(key) {
+                if poll.next_time > poll.stop_time {
+                    // no more runs
+                    false
+                } else {
+                    // more runs
+                    true
+                }
+            } else {
+                // not runnable
+                return None;
+            }
+        };
+        if more_runs {
+            // update `next time``
+            if let Some(ref mut poll) = self.p.write().unwrap().get_mut(key) {
+                poll.advance();
+                Some(AppRequest::Poll(poll.result.clone()))
+            } else {
+                None
+            }
+        } else {
+            // no more runs
+            let removed = self.remove(key);
+            removed.map(|poll| AppRequest::Poll(poll.result))
+        }
+    }
+
+    fn remove(&mut self, key: &str) -> Option<PendingPoll> {
+        self.p.write().unwrap().remove(key)
     }
 }
 
@@ -179,9 +189,10 @@ impl Stream for PendingPolls {
     type Item = AppRequest;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<AppRequest>> {
-        let (runnable, to_wait) = self.get_runnable();
-        if let Some(runnable) = runnable {
-            return Poll::Ready(Some(runnable));
+        let (runnable_key, to_wait) = self.get_runnable();
+        if let Some(key) = runnable_key {
+            let req = self.prepare_for_run(&key);
+            return Poll::Ready(req);
         }
 
         self.waker.write().unwrap().register(cx.waker());
@@ -198,9 +209,10 @@ impl Stream for PendingPolls {
 
         // Need to check condition **after** `register` to avoid a race
         // condition that would result in lost notifications.
-        let (runnable, _to_wait) = self.get_runnable();
-        if let Some(runnable) = runnable {
-            return Poll::Ready(Some(runnable));
+        let (runnable_key, _to_wait) = self.get_runnable();
+        if let Some(key) = runnable_key {
+            let req = self.prepare_for_run(&key);
+            return Poll::Ready(req);
         } else {
             Poll::Pending
         }
@@ -219,16 +231,7 @@ impl PKAppAsync {
     /// Starts the background processing thread.
     pub fn new() -> Result<Self, String> {
         let (incoming_sender, incoming_receiver) = mpsc::channel::<AppRequest>(100);
-        let instance = Self {
-            incoming_sender,
-            // incoming_receiver,
-            // app: None,
-            // pending_polls: Arc::new(PendingPolls::new()),
-        };
-        // let mut queue = Queue::new();
-        // let sender = queue.get_sender_clone();
-        // let sender2 = queue.get_sender_clone();
-        // let app_async = PKAppAsync { sender };
+        let instance = Self { incoming_sender };
 
         // Start background processor thread
         let mut instance_clone = instance.clone();
@@ -236,16 +239,6 @@ impl PKAppAsync {
             instance_clone
                 .process_app_requests_loop(incoming_receiver)
                 .await;
-            // match PKApp::new().await {
-            //     Err(err) => {
-            //         let err_msg = format!("Could not create app, {}", err.to_string());
-            //         eprint!("{}", err_msg);
-            //         (callback)(&AppEvent::CreateResult(Err(err_msg)));
-            //     }
-            //     Ok(ref mut app) => {
-            //         Self::process_app_requests_loop(app, &mut queue, callback, &sender2).await;
-            //     }
-            // }
         });
 
         Ok(instance)
@@ -281,21 +274,14 @@ impl PKAppAsync {
         self.send_to_incoming(AppRequest::InitApp(outgoing_sender))
     }
 
-    async fn process_app_requests_loop(
-        &mut self,
-        incoming_receiver: Receiver<AppRequest>,
-        // pending_requests: Arc<PendingPolls>,
-        // app: &mut PKApp,
-        // queue: &mut Queue<AppRequest>,
-        // callback: AppCallback,
-        // sender: &QueueSender<AppRequest>,
-    ) {
+    async fn process_app_requests_loop(&mut self, incoming_receiver: Receiver<AppRequest>) {
         // placeholder for app
         let mut app: Option<PKApp> = None;
         let mut outgoing_sender: Option<Sender<AppEvent>> = None;
         // Pending poll operations
-        let mut pending_polls = PendingPolls::new();
-        let mut select_stream = stream::select(incoming_receiver, pending_polls.clone());
+        let pending_polls = PendingPolls::new();
+        let mut pending_polls2 = pending_polls.clone();
+        let mut select_stream = stream::select(incoming_receiver, pending_polls);
         loop {
             match select_stream.next().await {
                 None => {
@@ -316,8 +302,13 @@ impl PKAppAsync {
                         // Took a request
                         if let Some(ref mut app) = &mut app {
                             if let Some(out_sender) = &mut outgoing_sender {
-                                Self::process_one_request(app, out_sender, req, &mut pending_polls)
-                                    .await;
+                                Self::process_one_request(
+                                    app,
+                                    out_sender,
+                                    req,
+                                    &mut pending_polls2,
+                                )
+                                .await;
                             } else {
                                 println!("Error: Request with missing out_sender, {:?}", req);
                             }
@@ -415,37 +406,8 @@ impl PKAppAsync {
                             2000,
                             30, // TODO increase
                         );
-                        /*
-                        // TODO non-blocking
-                        let res = app.mint_from_ln_wait(intermediary_result).await;
-                        let _res =
-                            Self::send_out_event(out_sender, AppEvent::MintFromLnRes(res)).await;
-                        // (callback)(&AppEvent::MintFromLnInvoice(invoice.to_owned()));
-                        if let Some(res) = intermediary_result.paid_result {
-                            // (callback)(&AppEvent::MintFromLnRes(res));
-                        } else {
-                            let next_check_time = intermediary_result.next_check_time;
-                            let _res = sender.send(
-                                AppRequest::MintFromLnCheck(intermediary_result),
-                                // Some(next_check_time),
-                            );
-                        }
-                        */
                     }
                 };
-            }
-            AppRequest::MintFromLnCheck(intermediary_result) => {
-                if let Some(res) = intermediary_result.paid_result {
-                    let _res = Self::send_out_event(out_sender, AppEvent::MintFromLnRes(res)).await;
-                } else {
-                    /*/
-                    let next_check_time = intermediary_result.next_check_time;
-                    let _res = sender.send(
-                        AppRequest::MintFromLnCheck(intermediary_result),
-                        // Some(next_check_time),
-                    );
-                    */
-                }
             }
             AppRequest::MeltToLn(invoice) => {
                 let res = app.melt_to_ln(&invoice).await;
@@ -460,12 +422,18 @@ impl PKAppAsync {
                 let _res = Self::send_out_event(out_sender, AppEvent::SendECRes(res)).await;
             }
             AppRequest::Poll(intermediary_result) => {
-                // TODO check
                 let res = app.mint_from_ln_check(intermediary_result).await;
                 if let Ok(res) = res {
+                    let id = res.id();
                     if let Some(result) = res.paid_result {
+                        // we have a final result; remove from map and notify
+                        pending_polls.remove(&id);
                         let _res =
                             Self::send_out_event(out_sender, AppEvent::MintFromLnRes(result)).await;
+                        // also update balance
+                        let res = app.get_balance().await;
+                        let _res =
+                            Self::send_out_event(out_sender, AppEvent::BalanceChange(res)).await;
                     }
                 }
             }
