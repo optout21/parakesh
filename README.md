@@ -1,6 +1,6 @@
 # ParaKesh
 
-Simple, reference implementation Cashu wallet, based on CDK.
+Simple, reference implementation Cashu wallet, in Rust, with UI, based on CDK.
 
 ## Features
 
@@ -15,17 +15,17 @@ Simple, reference implementation Cashu wallet, based on CDK.
 ## TODO
 
 Proto:
-- UI, RecLN: UI blocked while waiting for LN status
-- UI: Mints in dialog
+- UI: Show Mints in dialog
 - Add mint!
+
 MVP:
-- iced upgrade to 13.1 (latest), wrapping
 - Wallet init, seed verify
 - cmd line args
 - arg for DB file
+
 Non-MVP:
 - send EC from multiple mints, select automatically (feature on which level?)
-- pending operations
+- pending operations, show, check
 - app: collect logs, provide
 - claim pending
 - list proofs

@@ -5,7 +5,7 @@ members = [ "parakesh",
     "parakesh",
     "parakesh-common",
     "parakesh-console-sync",
-    #"parakesh-ui",
+    "parakesh-ui",
 ]
 
 exclude = []

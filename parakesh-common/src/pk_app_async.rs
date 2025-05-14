@@ -244,12 +244,14 @@ impl PKAppAsync {
         Ok(instance)
     }
 
-    /// Initialize with a callback, response events will be delivered there
-    pub fn init_with_callback<F: Fn(AppEvent) + std::marker::Send + 'static>(
-        &mut self,
+    /// Create instance of the app shell, initialized to receive events in a callback.
+    /// Starts the background processing thread.
+    pub fn new_with_callback<F: Fn(AppEvent) + std::marker::Send + 'static>(
         callback: F,
-    ) -> Result<(), String> {
-        let mut event_receiver = self.init_channels()?;
+    ) -> Result<Self, String> {
+        let mut instance = Self::new()?;
+
+        let mut event_receiver = instance.init_channels()?;
 
         // Event receiver thread
         tokio::task::spawn(async move {
@@ -266,7 +268,7 @@ impl PKAppAsync {
             }
         });
 
-        Ok(())
+        Ok(instance)
     }
 
     /// Initialize with a sender (channel), response events will be delivered there

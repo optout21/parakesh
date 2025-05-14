@@ -281,8 +281,7 @@ async fn main() {
     println!("ParaKesh: GM!");
     // TODO args, etc.
 
-    let mut app = PKAppAsync::new().unwrap();
-    app.init_with_callback(handle_event).unwrap();
+    let mut app = PKAppAsync::new_with_callback(handle_event).unwrap();
 
     // handle interactive commands
     poll_for_user_input(&mut app);
