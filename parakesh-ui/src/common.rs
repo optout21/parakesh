@@ -31,6 +31,7 @@ pub(crate) enum Message {
     AmountInput(String),
     InvoiceInput(String),
     TokenInput(String),
+    AddMintInput(String),
     ReceiveLN(u64),
     ReceiveLNOK,
     ReceiveEC(String),
@@ -40,6 +41,7 @@ pub(crate) enum Message {
     SendEC(u64),
     SendECOK,
     SelectMint(String),
+    AddMint(String),
     WidgetMessage((String, WidgetMessage)),
     CopyToClipboard(String),
 }

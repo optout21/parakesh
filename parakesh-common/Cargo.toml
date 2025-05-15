@@ -1,7 +1,10 @@
 [package]
 name = "parakesh-common"
 version = "0.1.1"
+description = "Common parts for ParaKesh Cashu wallet"
+license = "MIT"
 edition = "2021"
+
 
 [dependencies]
 cdk = "0.8.1"

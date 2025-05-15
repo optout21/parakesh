@@ -14,11 +14,14 @@ Simple, reference implementation Cashu wallet, in Rust, with UI, based on CDK.
 
 ## TODO
 
+Minor:
+- No mint list, selected mint if only one mint
+
 Proto:
 - UI: Show Mints in dialog
-- Add mint!
 
 MVP:
+- mint onboarding: guide to adding mint, propose mints, links to pink
 - Wallet init, seed verify
 - cmd line args
 - arg for DB file
@@ -28,10 +31,13 @@ Non-MVP:
 - pending operations, show, check
 - app: collect logs, provide
 - claim pending
+- mint list, with recommendations, etc.
+- Parse and show info from entered LN invoice & cashu tokens
 - list proofs
 - re-mint, change denoms
 - burn spent tokens
 - send LN from multiple mints (MPP)
+- read QR codes
 
 CDK:
 - melt_quote_status vs. mint_quote_state
