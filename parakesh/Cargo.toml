@@ -1,6 +1,8 @@
 [package]
 name = "parakesh"
 version = "0.1.1"
+description = "Simple Cashu wallet, console UI, based on CDK, event-based invocations"
+license = "MIT"
 edition = "2021"
 
 [dependencies]

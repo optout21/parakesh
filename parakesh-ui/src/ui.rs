@@ -10,6 +10,14 @@ use iced::widget::{button, column, mouse_area, row, scrollable, text, text_input
 use iced::{Element, Renderer, Task, Theme};
 
 #[derive(Default)]
+enum AddMintState {
+    #[default]
+    NotRequested,
+    Requested,
+    Completed(Result<(), String>),
+}
+
+#[derive(Default)]
 enum RecLNState {
     #[default]
     NotRequested,
@@ -53,7 +61,9 @@ pub(crate) struct IcedApp {
     amount_input: String,
     invoice_input: String,
     token_input: String,
+    add_mint_input: String,
 
+    add_mint_state: AddMintState,
     rec_ln_state: RecLNState,
     rec_ec_state: RecECState,
     send_ln_state: SendLNState,
@@ -250,6 +260,7 @@ impl IcedApp {
             .as_ref()
             .map(|wi| wi.selected_mint_url.to_string())
             .unwrap_or("?".to_owned());
+
         let mints_ui: Column<'_, Message, Theme, Renderer> =
             Column::with_children(self.mints_info.iter().map(|mi| {
                 mouse_area(row![
@@ -266,11 +277,25 @@ impl IcedApp {
             }));
         column![
             row![text("Mints:").size(20)],
-            row![
-                text("Selected mint: ").size(15),
-                text(selected_mint).size(15),
-            ],
+            row![text("Selected: ").size(15), text(selected_mint).size(15),],
+            row![text("List (click to select)").size(15),],
             mints_ui,
+            row![
+                button("Add Mint:").on_press(Message::AddMint(self.add_mint_input.clone())),
+                text_input("(mint url)", &self.add_mint_input)
+                    .on_input(Message::AddMintInput)
+                    .size(20)
+                    .width(200),
+            ]
+            .spacing(10),
+            row![text(match &self.add_mint_state {
+                AddMintState::NotRequested => "-".to_owned(),
+                AddMintState::Requested => "Add in progress...".to_owned(),
+                AddMintState::Completed(Ok(_)) => "Mint added".to_owned(),
+                AddMintState::Completed(Err(e)) => format!("Error adding mint, {}", e),
+            })
+            .size(15),]
+            .spacing(10),
         ]
         .spacing(10)
         .into()
@@ -323,14 +348,14 @@ impl IcedApp {
         let header = self.view_header();
 
         let tab_header: Element<Message> = row![
+            button("Mints").on_press(Message::Tab(UiMainTab::Mints)),
             button("Receive LN").on_press(Message::Tab(UiMainTab::RecLN)),
             button("Receive EC").on_press(Message::Tab(UiMainTab::RecEC)),
             button("Send LN").on_press(Message::Tab(UiMainTab::SendLN)),
             button("Send EC").on_press(Message::Tab(UiMainTab::SendEC)),
-            button("Mints").on_press(Message::Tab(UiMainTab::Mints)),
             button("Settings").on_press(Message::Tab(UiMainTab::Settings)),
             text("|").size(20),
-            button("Refresh").on_press(Message::RefreshInfo),
+            button("(Refresh)").on_press(Message::RefreshInfo),
         ]
         .spacing(10)
         .into();
@@ -362,7 +387,9 @@ impl IcedApp {
             amount_input: "0".to_owned(),
             invoice_input: "".to_owned(),
             token_input: "".to_owned(),
+            add_mint_input: "".to_owned(),
 
+            add_mint_state: AddMintState::NotRequested,
             rec_ln_state: RecLNState::NotRequested,
             rec_ec_state: RecECState::NotRequested,
             send_ln_state: SendLNState::NotRequested,
@@ -432,7 +459,8 @@ impl IcedApp {
                         self.wallet_info = Some(wallet_info.clone());
                     }
                 }
-                AppEvent::MintAdded(_res) => {
+                AppEvent::MintAdded(res) => {
+                    self.add_mint_state = AddMintState::Completed(res);
                     self.refresh_info();
                 }
                 AppEvent::MintSelectedByUrl(_res) => {
@@ -480,6 +508,10 @@ impl IcedApp {
             Message::SelectMint(url) => {
                 let _res = self.app.select_mint(url);
             }
+            Message::AddMint(url) => {
+                self.add_mint_state = AddMintState::Requested;
+                let _res = self.app.add_mint(url);
+            }
             Message::AmountInput(amount_str) => {
                 if let Ok(amnt) = amount_str.parse::<f64>() {
                     self.amount_input = (amnt as u64).to_string();
@@ -490,6 +522,9 @@ impl IcedApp {
             }
             Message::TokenInput(token) => {
                 self.token_input = token;
+            }
+            Message::AddMintInput(mint_url) => {
+                self.add_mint_input = mint_url;
             }
             Message::ReceiveLN(amount) => {
                 self.rec_ln_state = RecLNState::Requested(amount);
