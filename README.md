@@ -57,6 +57,7 @@ https://mint.minibits.cash/Bitcoin
 
 https://testnut.cashu.space
 https://fake.thesimplekid.dev
+https://cashu.mutinynet.com  (on MutinyNet)
 
 
 ## MSRV
