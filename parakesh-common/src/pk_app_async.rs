@@ -489,4 +489,7 @@ impl PKAppAsync {
     pub fn send_ec(&mut self, amount_sats: u64) -> Result<(), String> {
         self.send_to_incoming(AppRequest::SendEC(amount_sats))
     }
+    pub fn get_recommended_mint_list() -> Vec<(String, String)> {
+        PKApp::get_recommended_mint_list()
+    }
 }

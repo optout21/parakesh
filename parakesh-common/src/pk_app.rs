@@ -514,6 +514,32 @@ impl PKApp {
             Err("No selected mint!".to_owned())
         }
     }
+
+    pub fn get_recommended_mint_list() -> Vec<(String, String)> {
+        return vec![
+            (
+                "https://mint.minibits.cash/Bitcoin".to_owned(),
+                "MiniBits".to_owned(),
+            ),
+            ("https://21mint.me".to_owned(), "21mint".to_owned()),
+            (
+                "https://mint.lnwallet.app".to_owned(),
+                "LNWallet".to_owned(),
+            ),
+            (
+                "https://testnut.cashu.space".to_owned(),
+                "Test (cashu.space)".to_owned(),
+            ),
+            (
+                "https://fake.thesimplekid.dev".to_owned(),
+                "Test (simplekid".to_owned(),
+            ),
+            (
+                "https://cashu.mutinynet.com".to_owned(),
+                "Test, on MutinyNet)".to_owned(),
+            ),
+        ];
+    }
 }
 
 impl MintFromLnIntermediaryResult {
