@@ -25,6 +25,7 @@ MVP:
 - Wallet init, seed verify
 - cmd line args
 - arg for DB file
+- when polling for RecLN, use original mint, not current (save the mint with the req)
 
 Non-MVP:
 - send EC from multiple mints, select automatically (feature on which level?)

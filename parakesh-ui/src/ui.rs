@@ -57,6 +57,7 @@ pub(crate) struct IcedApp {
     balance: Option<BalanceInfo>,
     mints_info: Vec<MintInfo>,
     main_tab: UiMainTab,
+    reccomended_mints: Vec<(String, String)>,
 
     amount_input: String,
     invoice_input: String,
@@ -261,33 +262,47 @@ impl IcedApp {
             .map(|wi| wi.selected_mint_url.to_string())
             .unwrap_or("?".to_owned());
 
-        let mints_ui: Column<'_, Message, Theme, Renderer> =
-            Column::with_children(self.mints_info.iter().map(|mi| {
-                mouse_area(row![
-                    text(mi.url.to_string())
-                        .font(MyFonts::bold_if(mi.url.to_string() == selected_mint))
-                        .size(15)
-                        .width(300),
-                    text(format!("  {}", mi.balance))
-                        .font(MyFonts::bold_if(mi.url.to_string() == selected_mint))
-                        .size(15),
-                ])
-                .on_press(Message::SelectMint(mi.url.to_string()))
-                .into()
-            }));
-        column![
-            row![text("Mints:").size(20)],
-            row![text("Selected: ").size(15), text(selected_mint).size(15),],
-            row![text("List (click to select)").size(15),],
-            mints_ui,
+        let mut contents = Vec::new();
+        if self.mints_info.len() == 0 {
+            contents.push(row![text("No Mint added").size(20)]);
+            contents.push(row![text("Add a mint").size(20)]);
+        } else {
+            contents.push(row![text("Mints:").size(20)]);
+            contents.push(row![
+                text("Selected: ").size(15),
+                text(selected_mint.clone()).size(15),
+            ]);
+            if self.mints_info.len() > 1 {
+                let mints_ui: Column<'_, Message, Theme, Renderer> =
+                    Column::with_children(self.mints_info.iter().map(|mi| {
+                        mouse_area(row![
+                            text(mi.url.to_string())
+                                .font(MyFonts::bold_if(mi.url.to_string() == selected_mint))
+                                .size(15)
+                                .width(300),
+                            text(format!("  {}", mi.balance))
+                                .font(MyFonts::bold_if(mi.url.to_string() == selected_mint))
+                                .size(15),
+                        ])
+                        .on_press(Message::SelectMint(mi.url.to_string()))
+                        .into()
+                    }));
+                contents.push(row![text("List (click to select)").size(15),]);
+                contents.push(row![mints_ui]);
+            }
+        }
+        // Add mint is common
+        contents.push(
             row![
                 button("Add Mint:").on_press(Message::AddMint(self.add_mint_input.clone())),
                 text_input("(mint url)", &self.add_mint_input)
                     .on_input(Message::AddMintInput)
                     .size(20)
-                    .width(200),
+                    .width(400),
             ]
             .spacing(10),
+        );
+        contents.push(
             row![text(match &self.add_mint_state {
                 AddMintState::NotRequested => "-".to_owned(),
                 AddMintState::Requested => "Add in progress...".to_owned(),
@@ -296,9 +311,22 @@ impl IcedApp {
             })
             .size(15),]
             .spacing(10),
-        ]
-        .spacing(10)
-        .into()
+        );
+        contents.push(row![text(
+            "You can also select a mint for addition from this list:"
+        )
+        .size(15)]);
+        let recommended_mints_ui: Column<'_, Message, Theme, Renderer> =
+            Column::with_children(self.reccomended_mints.iter().map(|(url, info)| {
+                mouse_area(row![text(format!("{} - {}", info, url)).size(15),])
+                    .on_press(Message::AddMintInput(url.clone()))
+                    .into()
+            }));
+        contents.push(row![recommended_mints_ui]);
+
+        Column::with_children(contents.into_iter().map(|e| e.into()))
+            .spacing(10)
+            .into()
     }
 
     fn view_settings(&self) -> Element<Message> {
@@ -383,7 +411,8 @@ impl IcedApp {
             wallet_info: None,
             balance: None,
             mints_info: Vec::new(),
-            main_tab: UiMainTab::RecLN,
+            reccomended_mints: PKAppAsync::get_recommended_mint_list(),
+            main_tab: UiMainTab::Mints,
             amount_input: "0".to_owned(),
             invoice_input: "".to_owned(),
             token_input: "".to_owned(),
