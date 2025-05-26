@@ -278,7 +278,7 @@ fn handle_event(event: AppEvent) {
 
 #[tokio::main]
 async fn main() {
-    println!("ParaKesh: GM!");
+    println!("Parakesh: GM!");
     // TODO args, etc.
 
     let mut app = PKAppAsync::new_with_callback(handle_event).unwrap();
@@ -286,5 +286,5 @@ async fn main() {
     // handle interactive commands
     poll_for_user_input(&mut app);
 
-    println!("ParaKesh: ciao!");
+    println!("Parakesh: ciao!");
 }

@@ -1,4 +1,4 @@
-# ParaKesh
+# Parakesh
 
 Simple, reference implementation Cashu wallet, in Rust, with UI, based on CDK.
 
@@ -15,12 +15,10 @@ Simple, reference implementation Cashu wallet, in Rust, with UI, based on CDK.
 ## TODO
 
 Minor:
-- 
-
-Proto:
-- UI: Show Mints in dialog
+- .
 
 MVP:
+- Animated QR code (ecash doesn't fit)
 - mint onboarding: guide to adding mint, propose mints, links to lists
 - Wallet init, seed verify
 - cmd line args

@@ -291,7 +291,7 @@ async fn poll_for_user_input(app: &mut PKApp) {
 
 #[tokio::main]
 async fn main() {
-    println!("ParaKesh: GM!");
+    println!("Parakesh: GM!");
 
     // args, init, etc.
 
@@ -307,5 +307,5 @@ async fn main() {
     // while !bg_handle.is_finished() {
     //     std::thread::sleep(Duration::from_millis(10));
     // }
-    println!("ParaKesh: ciao!");
+    println!("Parakesh: ciao!");
 }

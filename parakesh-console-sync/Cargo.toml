@@ -1,11 +1,11 @@
 [package]
 name = "parakesh-console-sync"
-version = "0.1.1"
+version = "0.2.0"
 description = "Simple Cashu wallet, console UI, built on CDK, simple async/await invocations"
 license = "MIT"
 edition = "2021"
 
 [dependencies]
-parakesh-common = { version = "0.1.1", path = "../parakesh-common" }
+parakesh-common = { version = "0.2.0", path = "../parakesh-common" }
 tokio = "1.44.1"
 
