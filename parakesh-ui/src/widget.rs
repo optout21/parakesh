@@ -1,5 +1,5 @@
 use crate::common::{Message, MyFonts, WidgetMessage};
-use iced::widget::qr_code::Data;
+use iced::widget::qr_code::{Data, ErrorCorrection};
 use iced::widget::{button, qr_code, row, text, Column, Row};
 use iced::Element;
 
@@ -66,12 +66,23 @@ impl ShowLongStringWidget {
     /// by default (if it's None), the string is used.
     fn set_data(&mut self, data_string: Option<String>, data_bin: Option<Vec<u8>>) {
         if let Some(data_string) = data_string {
-            let bin = match data_bin {
+            let mut bin = match data_bin {
                 Some(data) => data,
                 None => data_string.as_bytes().to_vec(),
             };
-            self.data_qr = Data::new(bin.clone()).ok();
-            self.data_bin = Some(bin);
+            self.data_bin = Some(bin.clone());
+            match Data::with_error_correction(bin, ErrorCorrection::Low) {
+                Ok(qr) => {
+                    self.data_qr = Some(qr);
+                }
+                Err(err) => {
+                    println!("QR error: {}", err);
+                    // Put the error in the QR code
+                    bin = format!("Error: {}", err).as_bytes().to_vec();
+                    self.data_bin = Some(bin.clone());
+                    self.data_qr = Data::new(bin).ok();
+                }
+            }
             self.data_string = Some(data_string);
         } else {
             self.data_string = None;
