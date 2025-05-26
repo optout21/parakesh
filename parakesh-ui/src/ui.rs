@@ -329,19 +329,18 @@ impl IcedApp {
             .into()
     }
 
-    fn view_settings(&self) -> Element<Message> {
-        column![row![text("Settings").size(20)], row![text("TODO").size(20)],].into()
-    }
+    // fn view_settings(&self) -> Element<Message> {
+    //     column![row![text("Settings").size(20)], row![text("TODO").size(20)],].into()
+    // }
 
     fn view_header(&self) -> Element<Message> {
-        let wallet_info = match &self.wallet_info {
-            None => "?".to_owned(),
+        let (wallet_info, mints_info) = match &self.wallet_info {
+            None => ("?".to_owned(), "?".to_owned()),
             Some(wi) => {
                 if !wi.is_inititalized {
-                    "Not initialized".to_owned()
+                    ("Not initialized".to_owned(), "No Mints".to_owned())
                 } else {
-                    let mut buf = "OK  ".to_owned();
-                    buf.push_str("Current mint: ");
+                    let mut buf = "Current mint: ".to_owned();
                     buf.push_str(wi.selected_mint_url.as_str());
                     buf.push_str("  ");
                     buf.push_str(
@@ -352,7 +351,7 @@ impl IcedApp {
                         }
                         .as_str(),
                     );
-                    buf
+                    ("OK".to_owned(), buf)
                 }
             }
         };
@@ -367,7 +366,12 @@ impl IcedApp {
                 text(balance).size(20),
                 text(" sats").size(20),
             ],
-            row![text("Wallet: ").size(15), text(wallet_info).size(15),],
+            row![
+                text("Wallet: ").size(15),
+                text(wallet_info).size(15),
+                text("   ").size(15),
+                mouse_area(text(mints_info).size(15)).on_press(Message::Tab(UiMainTab::Mints)),
+            ],
         ]
         .into()
     }
@@ -381,9 +385,9 @@ impl IcedApp {
             button("Receive EC").on_press(Message::Tab(UiMainTab::RecEC)),
             button("Send LN").on_press(Message::Tab(UiMainTab::SendLN)),
             button("Send EC").on_press(Message::Tab(UiMainTab::SendEC)),
-            button("Settings").on_press(Message::Tab(UiMainTab::Settings)),
-            text("|").size(20),
-            button("(Refresh)").on_press(Message::RefreshInfo),
+            // button("Settings").on_press(Message::Tab(UiMainTab::Settings)),
+            // text("|").size(20),
+            // button("(Refresh)").on_press(Message::RefreshInfo),
         ]
         .spacing(10)
         .into();
@@ -394,7 +398,7 @@ impl IcedApp {
             UiMainTab::SendLN => self.view_send_ln(),
             UiMainTab::SendEC => self.view_send_ec(),
             UiMainTab::Mints => self.view_mints(),
-            UiMainTab::Settings => self.view_settings(),
+            // UiMainTab::Settings => self.view_settings(),
         };
 
         column![header, tab_header, tab_view,]
@@ -463,9 +467,9 @@ impl IcedApp {
                 let _res = self.app.init_with_sender(sender);
             }
             // Message::RefreshNoop => {}
-            Message::RefreshInfo => {
-                self.refresh_info();
-            }
+            // Message::RefreshInfo => {
+            //     self.refresh_info();
+            // }
             Message::AppEvent(ev) => match ev {
                 AppEvent::WalletInfo(wallet_info) => {
                     if let Ok(wallet_info) = &wallet_info {

@@ -15,13 +15,13 @@ Simple, reference implementation Cashu wallet, in Rust, with UI, based on CDK.
 ## TODO
 
 Minor:
-- No mint list, selected mint if only one mint
+- 
 
 Proto:
 - UI: Show Mints in dialog
 
 MVP:
-- mint onboarding: guide to adding mint, propose mints, links to pink
+- mint onboarding: guide to adding mint, propose mints, links to lists
 - Wallet init, seed verify
 - cmd line args
 - arg for DB file
@@ -42,9 +42,6 @@ Non-MVP:
 
 CDK:
 - melt_quote_status vs. mint_quote_state
-- (Copy on CurrencyUnit, MintUrl)
-- (Amount: as_sat, etc.)
-- (melt_quote takes &str instead of String)
 
 
 ## Sample Mints

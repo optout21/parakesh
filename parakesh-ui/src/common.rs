@@ -11,7 +11,7 @@ pub(crate) enum UiMainTab {
     SendLN,
     SendEC,
     Mints,
-    Settings,
+    // Settings,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -25,7 +25,7 @@ pub(crate) enum WidgetMessage {
 pub(crate) enum Message {
     SubscriptionSender(Sender<AppEvent>),
     // RefreshNoop,
-    RefreshInfo,
+    // RefreshInfo,
     AppEvent(AppEvent),
     Tab(UiMainTab),
     AmountInput(String),
